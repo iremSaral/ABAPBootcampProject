@@ -1,0 +1,49 @@
+*&---------------------------------------------------------------------*
+*& Include ZIS_GRAD_PROJECT_DATAINC
+*&---------------------------------------------------------------------*
+*To Store Necessary Datas - İrem Saral
+*
+*
+TYPE-POOLS : vrm .
+*Excel title
+TYPES: BEGIN OF lty_exc_title,
+         string(100) TYPE c,
+       END OF lty_exc_title .
+TABLES : zis_businfo ,
+         zis_tripdetail .
+DATA :
+  gt_zıs_businfo TYPE STANDARD TABLE OF zis_st_bus,
+  gs_zıs_businfo TYPE zis_st_bus,
+*Field cat için
+  gt_fcat        TYPE lvc_t_fcat,
+  gs_fcat        TYPE lvc_s_fcat,
+  gs_layout      TYPE lvc_s_layo,
+* Save Control
+  lv_scontrol    TYPE i,
+* Excel File Upload
+  lt_file        LIKE alsmex_tabline OCCURS 0 WITH HEADER LINE,
+  ls_file        LIKE alsmex_tabline,
+*Excel export
+  lt_acc_xls     LIKE   gt_zıs_businfo,
+  lt_dntab       TYPE TABLE OF dntab,
+  lv_tabname     TYPE dntab-tabname,
+  lt_exc_title   TYPE TABLE OF lty_exc_title,
+  lv_filepath    TYPE string,
+  lv_path        TYPE string,
+  lv_fpath       TYPE string,
+  lv_filename TYPE string,
+*lv_rowNum  exceldeki satır sayısını tutmak için tanımladım .
+  lv_rowNum      TYPE  alsmex_tabline-row,
+* Save Function
+  gs_bus         TYPE zis_businfo,
+  gt_bus         TYPE  TABLE OF  zis_businfo , "veri tabanındaki kayıt
+  gs_trip        TYPE zis_tripdetail,
+  gt_trip        TYPE TABLE OF zis_tripdetail, "veri tabanındaki kayıt
+  gt_bus_temp    TYPE  TABLE OF  zis_businfo , "kayıt edilecek veriler
+  gs_bus_temp    TYPE   zis_businfo,
+  gs_trip_temp   TYPE zis_tripdetail,
+  gt_trip_temp   TYPE TABLE OF zis_tripdetail, "kayıt edilecek veriler
+*   gs_newtable ve  gt_user   excelde okunann verielri kaydetmek için tanımladım .
+  gs_newtable    TYPE zis_st_bus,
+  gt_user        TYPE TABLE OF zis_st_bus.
+* gt_zıs_businfo
