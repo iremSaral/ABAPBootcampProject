@@ -1,0 +1,66 @@
+*Irem Saral
+REPORT zis_grad_project.
+INCLUDE zis_grad_project_datainc .
+INCLUDE zis_grad_project_funcinc .
+
+
+*Tab Strip
+SELECTION-SCREEN BEGIN OF TABBED BLOCK tab FOR 10 LINES .
+  SELECTION-SCREEN TAB (10) tab_tab1   USER-COMMAND tab1 DEFAULT SCREEN 1001 .
+  SELECTION-SCREEN TAB (10) tab_tab2   USER-COMMAND tab2 DEFAULT SCREEN 1002 .
+SELECTION-SCREEN END OF  BLOCK  tab .
+
+SELECTION-SCREEN BEGIN OF SCREEN 1001 AS SUBSCREEN.
+  SELECTION-SCREEN BEGIN OF BLOCK one WITH FRAME TITLE  title1 .
+    PARAMETERS: p_sfrno TYPE zis_tripdetail-sfrno,
+                p_kalyr TYPE zis_tripdetail-kalyr,
+                p_varyr TYPE zis_tripdetail-varyr,
+                p_plaka TYPE zis_tripdetail-plaka,
+                p_kltrh TYPE zis_tripdetail-kltrh.
+
+  SELECTION-SCREEN END OF BLOCK one.
+SELECTION-SCREEN END OF SCREEN 1001.
+
+*Tab2-Excel File Upload Panel
+SELECTION-SCREEN BEGIN OF SCREEN 1002 AS SUBSCREEN.
+  SELECTION-SCREEN BEGIN OF BLOCK two WITH FRAME TITLE  title2 .
+    PARAMETERS p_fname TYPE localfile.
+  SELECTION-SCREEN END OF BLOCK two.
+SELECTION-SCREEN END OF SCREEN 1002.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fname.
+  PERFORM GetDataFromExcel USING p_fname.
+
+INITIALIZATION .
+  tab_tab1 = 'TAB1' .
+  tab_tab2 = 'TAB2' .
+  title1 = ' Filter Panel ' .
+  title2 = 'Excel Upload PAnel ' .
+
+START-OF-SELECTION .
+  IF tab-dynnr EQ 1001.
+    CLEAR gt_zıs_businfo.
+    lv_scontrol = 1001 .
+* Eğer tab1 deki alanlardan hrahngi birine bir değer girilmiş ise zli tablolardan filtreli veriyi çeker.
+*Bu ıf else i kaldırdığımızda hiç bir filre girilmemesi durumunda taablolardaki verilerin tamamını çeker.
+    IF p_sfrno IS NOT INITIAL OR  p_kalyr IS NOT INITIAL OR p_varyr IS NOT INITIAL OR p_plaka IS NOT INITIAL OR  p_kltrh IS NOT INITIAL .
+     PERFORM GetDataFromTable  USING p_sfrno p_kalyr p_varyr p_plaka p_kltrh.
+
+      PERFORM FieldCatalog.
+    PERFORM ALVReport USING lv_scontrol .
+    ELSE .
+      MESSAGE 'LUTFEN GECERLI DEGER GIRIN' TYPE 'S'.
+    ENDIF.
+
+  ELSEIF  tab-dynnr EQ 1002.
+     lv_scontrol = 1002 .
+* Herhangi bir excel dosyasının seçilmesi durumunda excel verielrini alv ye basar.
+*Excel dosyası seçilmemsi durumunda da ekranda mesaj gösterilir.
+    IF  p_fname IS NOT INITIAL.
+      PERFORM ReadExcelData  USING p_fname .
+      PERFORM FieldCatalog.
+    PERFORM ALVReport USING lv_scontrol .
+    ELSE .
+      MESSAGE 'EXCEL DOSYASI SEÇMELİSİNİZ' TYPE 'S'.
+    ENDIF.
+  ENDIF.
