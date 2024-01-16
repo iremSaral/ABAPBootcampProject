@@ -1,0 +1,345 @@
+*&---------------------------------------------------------------------*
+*& Include ZIS_GRAD_PROJECT_FUNCINC
+*&---------------------------------------------------------------------*
+*To Store Function - İrem Saral
+
+FORM GetDataFromTable USING
+  p_sfrno TYPE zis_tripdetail-sfrno
+  p_kalyr TYPE zis_tripdetail-kalyr
+  p_varyr TYPE zis_tripdetail-varyr
+  p_plaka TYPE zis_tripdetail-plaka
+  p_kltrh TYPE zis_tripdetail-kltrh .
+
+  SELECT * FROM zis_businfo LEFT OUTER JOIN zis_tripdetail
+    ON zis_businfo~plaka EQ zis_tripdetail~plaka AND
+    zis_businfo~sfrno EQ zis_tripdetail~sfrno
+    AND  zis_businfo~kalyr EQ zis_tripdetail~kalyr
+    AND  zis_businfo~varyr EQ zis_tripdetail~varyr
+      WHERE
+      ( zis_tripdetail~plaka EQ  @p_plaka OR @p_plaka IS INITIAL  )
+      AND ( zis_tripdetail~kltrh EQ @p_kltrh OR @p_kltrh  IS INITIAL  )
+      AND ( zis_tripdetail~varyr EQ @p_varyr OR @p_varyr  IS INITIAL  )
+      AND ( zis_tripdetail~kalyr EQ @p_kalyr OR @p_kalyr  IS INITIAL  )
+      AND ( zis_tripdetail~sfrno EQ @p_sfrno OR @p_sfrno  IS INITIAL  )
+         INTO CORRESPONDING FIELDS OF TABLE   @gt_zıs_businfo .
+
+ENDFORM .
+
+
+FORM FieldCatalog .
+  CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+    EXPORTING
+*     I_BUFFER_ACTIVE        =
+      i_structure_name       = 'ZIS_ST_BUS'
+*     I_CLIENT_NEVER_DISPLAY = 'X'
+*     I_BYPASSING_BUFFER     =
+*     I_INTERNAL_TABNAME     =
+    CHANGING
+      ct_fieldcat            = gt_fcat
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+*Field cat boyutlandırma
+* WHERE fieldname EQ 'SFRNO'
+  LOOP AT gt_fcat INTO gs_fcat .
+    CASE gs_fcat-fieldname .
+      WHEN 'SFRNO' OR 'KAPST' OR 'BLFYT' .
+        gs_fcat-outputlen = 10 .
+      WHEN 'KALYR' OR 'VARYR' OR 'MARKA' OR 'MODEL' OR 'PLAKA' OR 'TELNO' .
+        gs_fcat-outputlen = 15 .
+    ENDCASE .
+    MODIFY gt_fcat FROM gs_fcat TRANSPORTING outputlen.
+
+  ENDLOOP.
+
+ENDFORM .
+
+
+FORM ALVReport USING lv_scontrol TYPE i  .
+*ALV function
+*  t_outtab: data table ,    it_fieldcat_lvc :field catalog tablomuz
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'PF_STATUS_SET'
+*PF_STATUS
+*GUI STATUS BUTON CALLABKLARI İÇİN   i_callback_user_command
+      i_callback_user_command  = 'USER_COMMAND'
+*USERCOMMAND
+      is_layout_lvc            = gs_layout
+      it_fieldcat_lvc          = gt_fcat
+      i_default                = 'X'
+      i_save                   = ' '
+*is_variant               =
+    TABLES
+      t_outtab                 = gt_zıs_businfo
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+ENDFORM .
+
+FORM pf_status_set USING p_extab TYPE slis_t_extab.
+  SET PF-STATUS 'ZIS_GUI1'.
+ENDFORM.
+
+FORM user_command USING r_ucomm     LIKE sy-ucomm
+                        rs_selfield TYPE slis_selfield .
+  CASE r_ucomm.
+    WHEN '&BACK' .
+      LEAVE TO SCREEN 0.
+    WHEN '&BUSINFO' .
+      CALL TRANSACTION 'ZIS_HEADER' .
+    WHEN '&TRIP' .
+      CALL TRANSACTION 'ZIS_ITEM' .
+* Excel den gelen verilerde sadece kaydetme işlemi gerçekleşicek.
+    WHEN '&SAVE' .
+      IF lv_scontrol EQ 1002.
+        PERFORM SaveData .
+      ELSE .
+        MESSAGE 'VERILER TABLODAN CEKILMIS ' TYPE 'S' .
+      ENDIF.
+    WHEN '&EXCEL' .
+      PERFORM ExportXLS .
+  ENDCASE.
+
+ENDFORM.
+
+*TAB2 FUNCTİON
+*to get file from user
+FORM GetDataFromExcel USING p_fname .
+
+  DATA: file_table TYPE filetable,
+        file_line  TYPE file_table,
+        rc         TYPE i.
+
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+    EXPORTING
+      default_extension       = ''
+    CHANGING
+      file_table              = file_table
+      rc                      = rc
+    EXCEPTIONS
+      file_open_dialog_failed = 1
+      cntl_error              = 2
+      error_no_gui            = 3
+      not_supported_by_gui    = 4
+      OTHERS                  = 5.
+
+  READ TABLE file_table INTO file_line INDEX 1.
+* file table dolu mu boş mu kontrol edilir
+  IF sy-subrc = 0.
+*dosya seçildi ise seçilen veriyi global filetable a atarız
+    p_fname = file_line-filename.
+  ENDIF.
+
+ENDFORM.
+
+* read excel file nd save db
+FORM ReadExcelData  USING p_fname .
+  CLEAR gt_zıs_businfo .
+*Excelden verileri alıp lt_file'a aktarır
+  CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+    EXPORTING
+*import parameters
+      filename                = p_fname
+      i_begin_col             = 1
+      i_begin_row             = 2
+      i_end_col               = 20
+      i_end_row               = 1000
+    TABLES
+*hem export hem import parametresi olabilir.
+      intern                  = lt_file
+    EXCEPTIONS
+      inconsistent_parameters = 1
+      upload_ole              = 2
+      OTHERS                  = 3.
+
+  IF sy-subrc NE 0 OR lt_file[] IS INITIAL.
+    MESSAGE 'Dosya Okunamadı !' TYPE 'I'.
+  ELSE .
+*Dosya okunup veriler çekildiyse ...
+    LOOP AT lt_file INTO ls_file.
+
+*ls-file a veriler sütun sütun ekleniyo
+* satır satır verielr okunur. Satır sayısı güncellenir.
+      lv_rowNum = ls_file-row.
+      IF ls_file-row EQ lv_rownum .
+* exceldeki sütun sıralaması belirli olduğu varsayarak sıra ile gerekli sütunlara atama yapılmasını istedim.
+        CASE ls_file-col.
+          WHEN 1 .
+* sürun 1 ise öğrenci numarası değişkenini al gibi .
+            gs_newtable-sfrno = ls_file-value .
+          WHEN 2 .
+            gs_newtable-kalyr = ls_file-value .
+          WHEN 3 .
+            gs_newtable-varyr = ls_file-value .
+          WHEN 4 .
+            gs_newtable-plaka = ls_file-value .
+          WHEN 5 .
+            gs_newtable-marka = ls_file-value .
+          WHEN 6 .
+            gs_newtable-model = ls_file-value .
+          WHEN 7 .
+            gs_newtable-telno = ls_file-value .
+          WHEN 8 .
+            gs_newtable-kapst = ls_file-value .
+          WHEN 9 .
+            gs_newtable-kltrh = ls_file-value .
+          WHEN 10 .
+            gs_newtable-vrtrh = ls_file-value .
+          WHEN 11 .
+            gs_newtable-blfyt = ls_file-value .
+* Tüm sütunların okunası tamamlanınca structure tabloya eklenir.
+            APPEND gs_newtable TO  gt_zıs_businfo  .
+          WHEN OTHERS.
+        ENDCASE.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+ENDFORM.
+
+FORM SaveData .
+*Veri tabanı tablosundaki veriler çekilir.
+*  SELECT * FROM zis_businfo INTO TABLE gt_bus  . "Header Table
+*  SELECT * FROM  zis_tripdetail INTO TABLE  gt_trip . "Item Table
+
+**Veri tabanı kayıtları ile excel dosyası akrşılaştırılır ,
+**Eğer aynı veri var ise modify işlemi yapılır. veri yok ise insert işlemi yapılır.
+  LOOP AT  gt_zıs_businfo INTO  gs_zıs_businfo.  "Excel verilerimi gezeriz
+*Header ve item columnarına göre ayrı tablolar oluşturulur.
+    gs_bus_temp-sfrno  = gs_zıs_businfo-sfrno .
+    gs_bus_temp-kalyr = gs_zıs_businfo-kalyr .
+    gs_bus_temp-varyr = gs_zıs_businfo-varyr .
+    gs_bus_temp-plaka = gs_zıs_businfo-plaka .
+    gs_bus_temp-marka = gs_zıs_businfo-marka .
+    gs_bus_temp-model = gs_zıs_businfo-model .
+    gs_bus_temp-telno = gs_zıs_businfo-telno .
+    gs_bus_temp-kapst = gs_zıs_businfo-kapst .
+
+    gs_trip_temp-sfrno = gs_zıs_businfo-sfrno .
+    gs_trip_temp-kalyr = gs_zıs_businfo-kalyr .
+    gs_trip_temp-varyr = gs_zıs_businfo-varyr .
+    gs_trip_temp-plaka = gs_zıs_businfo-plaka .
+    gs_trip_temp-kltrh = gs_zıs_businfo-kltrh .
+    gs_trip_temp-vrtrh = gs_zıs_businfo-vrtrh .
+    gs_trip_temp-blfyt = gs_zıs_businfo-blfyt .
+
+**      gt_bus_temp     gt_trip_temp
+*   Tablodan okunan excel değerinde kayıt varmı yok mu diye sorgu çekeriz.
+    SELECT * FROM zis_businfo WHERE sfrno EQ @gs_zıs_businfo-sfrno AND
+           kalyr EQ @gs_zıs_businfo-kalyr AND
+           varyr EQ @gs_zıs_businfo-varyr AND
+           plaka EQ @gs_zıs_businfo-plaka INTO TABLE  @gt_bus.
+
+*Tabloda kayıt var ise modify ile güncelleme yapar
+    IF gt_bus IS NOT INITIAL .
+*Header tablosunda olan veriyi item tablosunda da var mı diye ararız
+      SELECT * FROM zis_tripdetail WHERE kltrh EQ @gs_zıs_businfo-kltrh INTO  TABLE @gt_trip .
+      IF gt_trip IS NOT INITIAL .
+        MODIFY  zis_tripdetail FROM  gs_trip_temp .
+        MODIFY  zis_businfo FROM   gs_bus_temp .
+      ENDIF.
+
+    ELSE .
+*Kayıt yok ise Yeni kayıt ekler
+      INSERT INTO  zis_businfo VALUES  gs_bus_temp .
+      INSERT INTO  zis_tripdetail  VALUES  gs_trip_temp .
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM .
+*
+
+FORM ExportXLS .
+
+  CALL FUNCTION 'NAMETAB_GET'
+    EXPORTING
+      tabname             = lv_tabname
+    TABLES
+      nametab             = lt_dntab
+    EXCEPTIONS
+      internal_error      = 1
+      table_has_no_fields = 2
+      table_not_activ     = 3
+      no_texts_found      = 4
+      OTHERS              = 5.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+*set Header data
+  APPEND 'SFRNO' TO  lt_exc_title .
+  APPEND 'KALYR' TO  lt_exc_title .
+  APPEND 'VARYR' TO  lt_exc_title .
+  APPEND 'PLAKA' TO  lt_exc_title .
+  APPEND 'MARKA' TO  lt_exc_title .
+  APPEND 'MODEL' TO  lt_exc_title .
+  APPEND 'TELNO' TO  lt_exc_title .
+  APPEND 'KAPST' TO  lt_exc_title .
+  APPEND 'KLTRH' TO  lt_exc_title .
+  APPEND 'VRTRH' TO  lt_exc_title .
+  APPEND 'BLFYT' TO  lt_exc_title .
+
+  cl_gui_frontend_services=>file_save_dialog(
+      EXPORTING
+        default_extension    = 'XLS'
+      CHANGING
+        filename             = lv_filename
+        path                 = lv_path
+        fullpath             = lv_fpath
+      EXCEPTIONS
+        cntl_error           = 1
+        error_no_gui         = 2
+        not_supported_by_gui = 3
+        OTHERS               = 4
+           ).
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+
+  CALL FUNCTION 'GUI_DOWNLOAD'
+    EXPORTING
+      filename                = lv_fpath
+      filetype                = 'ASC'
+      write_field_separator   = 'X'
+    TABLES
+      data_tab                = lt_acc_xls
+      fieldnames              = lt_exc_title
+    EXCEPTIONS
+      file_write_error        = 1
+      no_batch                = 2
+      gui_refuse_filetransfer = 3
+      invalid_type            = 4
+      no_authority            = 5
+      unknown_error           = 6
+      header_not_allowed      = 7
+      separator_not_allowed   = 8
+      filesize_not_allowed    = 9
+      header_too_long         = 10
+      dp_error_create         = 11
+      dp_error_send           = 12
+      dp_error_write          = 13
+      unknown_dp_error        = 14
+      access_denied           = 15
+      dp_out_of_memory        = 16
+      disk_full               = 17
+      dp_timeout              = 18
+      file_not_found          = 19
+      dataprovider_exception  = 20
+      control_flush_error     = 21.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.
