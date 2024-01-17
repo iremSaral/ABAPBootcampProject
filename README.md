@@ -1,7 +1,10 @@
 # Otobus Bilgileri ve Seferleri Projesi
 
 ## Proje Tanımı
-Bu proje, otobus bilgilerini ve sefer detaylarını yönetmek için geliştirilmiştir. İki adet Z'li Tablo kullanılarak otobus bilgileri ve sefer detayları tutulmaktadır. Bu tablolar `ZIS_BUSINFO` ve `ZIS_TRIPDETAIL` olarak adlandırılmıştır.
+Bu proje, otobus bilgilerini ve sefer detaylarını yönetmek için geliştirilmiştir. İki adet Z'li Tablo kullanılarak otobus bilgileri ve sefer detayları tutulmaktadır. Bu tablolar `ZIS_BUSINFO` ve `ZIS_TRIPDETAIL` olarak adlandırılmıştır. 
+
+
+Projenin detaylarını çalışma algoritmasını anlattığım videoma  ([Loom](https://www.loom.com/share/cff667b4447d4c5a958a5243460aedee?sid=7a42f00f-b959-4143-b990-da4138ec6856)) ulaşabilirsiniz. 
 
 ## Proje Dosya Yapısı
 
